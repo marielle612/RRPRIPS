@@ -195,3 +195,87 @@ dr.M.rrrcomb<-function(object, nslices=2, dy=2, nclust=4, minc=5, slice.info=NUL
   
   return(list(M = M, slice.info = kmeans.out))
 }
+
+#######################################################################
+## Multiveraite version of Reduced-Rank Response (RRR)
+#######################################################################
+dr.M.rrr<-function(object, nslices=2, dy=2, nclust=4, minc=5, slice.info=NULL,...) {
+  z <- dr.z(object)
+  x <- dr.x(object)
+  y <- dr.y(object)
+  wts <- dr.wts(object)
+  
+  r <- dim(y)[2]
+  p <- dim(z)[2]
+  
+  ## Stating reduced-rank response mean method
+  cand.mat <- NULL
+  s0 <- mbrdr(y~x, method="prr")
+  cand.mat <- cbind(cand.mat, s0$evectors[,1:dy])
+  
+  s1 <- update(s0, method="pfrr")
+  cand.mat <- cbind(cand.mat, s1$evectors[,1:dy])
+  
+  s2 <- update(s0, method="upfrr")
+  cand.mat <- cbind(cand.mat, s2$evectors[,1:dy])
+  
+  s3 <- update(s0, method="yc")
+  cand.mat <- cbind(cand.mat, s3$evectors[,1:dy])
+  
+  pr.iter <- dim(cand.mat)[2]
+  M<-0
+  for (i in 1:pr.iter){ 
+    t.i <- cand.mat[,i]
+    t.i <- t.i /sqrt(sum(t.i^2))
+    t.i.y <- c(y %*% t.i)
+    ols1 <- dr.directions(dr( t.i.y~x, method="ols"))[,1]
+    phd1 <- dr.directions(dr( t.i.y~x, method="phdres"))[,1]
+    PI <- cbind(ols1, phd1)  
+    
+    if (nclust == 4) { kmeans.out <- dr.slices(PI, nslices=c(2,2))
+    actual.k <- kmeans.out$nslices
+    C.x <- kmeans.out$slice.indicator
+    size.Cx <- kmeans.out$slice.sizes
+    total.Cx <- sum(size.Cx) }  else { kmeans.out <- kmeans.min(PI, k=nclust, min=minc)
+    actual.k <- kmeans.out$nslices
+    C.x <- kmeans.out$slice.indicator
+    size.Cx <- kmeans.out$slice.sizes
+    total.Cx <- sum(size.Cx)   }
+    
+    M.j <- NULL
+    for(k in 1:actual.k){
+      sel.k <- C.x==k
+      z.k <- z[sel.k, ] ;  y.k <- t.i.y[sel.k]
+      wts.k <- wts[sel.k]
+      
+      slices <- dr.slices.arc(y.k, nslices)
+      zmeans <- matrix(0,slices$nslices,NCOL(z.k))
+      slice.weight <- rep(0,slices$nslices)  # NOT rep(0,NCOL(z.k))
+      
+      # compute weighted means within slice 
+      wmean <- function (x, wts) { sum(x * wts) / sum (wts) }
+      for (j in 1:slices$nslices){
+        sel <- slices$slice.indicator==j
+        zmeans[j,]<- apply(z.k[sel,],2, wmean, wts.k[sel])
+        slice.weight[j]<-sum(wts.k[sel])}
+      
+      # get M matrix for sir
+      ini.M <- t(apply(zmeans, 2, "*", sqrt(slice.weight))/ sqrt(sum(slice.weight)))
+      M.j <- cbind(M.j, ( ini.M*(size.Cx[k]/total.Cx) ))
+    } ## coordinate mean
+    
+    ##    if (dim(M.j)[2] != (nslices*nclust) ) {
+    ##         diff.col <-  (nslices*nclust) - dim(M.j)[2]
+    ##         M.j.zeros <- matrix( rep(0, (p*diff.col) ), c(p, diff.col) )
+    ##         M.j <- cbind(M.j, M.j.zeros) }
+    
+    M.j <- M.j%*% t(M.j)
+    M <- M+M.j
+  }
+  M.pr <- M/pr.iter
+  
+  return(list(M = M.pr, slice.info = kmeans.out))
+}
+
+
+
