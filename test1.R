@@ -533,4 +533,32 @@ dr.M.PRpcm<-function(object, nslices=2, nclust=4, pr.iter=1000, minc=5, slice.in
   return(list(M = M, slice.info = kmeans.out))
 }
 
+# Model 1
+
+n<-100
+r42 <-NULL
+for (i in 1:500){
+  u1 <- runif(n); e <- runif(n,-0.5,0.5); u2 <- log(u1)+e
+  w1 <- rnorm(n); w2 <- rnorm(n); w3 <- rnorm(n)
+  
+  x1 <- u1+w1 ; x2 <- u2+w2+w3; x3 <- w1-w2; x4 <- w2; x5 <- w3
+  x6 <- rnorm(n); x7 <- rnorm(n); x8 <- rnorm(n)
+  x9 <- rnorm(n) ; x10 <- rnorm(n)
+  
+  eta.x <- x1-x2-x3
+  y1 <- exp(0.5*eta.x+1) +0.1*rnorm(n)
+  y2 <- eta.x^2 +0.1*rnorm(n)
+  y3 <- y1+y2 +0.1*rnorm(n)
+  y4 <-abs(eta.x) +0.1*rnorm(n)
+  
+  sim.dat<-data.frame(y1, y2, y3, y4, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10)
+  
+  rrr <- dr(cbind(y1, y2, y3, y4)~x1+x2+x3+x4+x5+x6+x7+x8+x9+x10, data=sim.dat, dy=2, nclust=4, nslices=2, method="rrr")
+  
+  eta.hat.x <- dr.directions(rrr)[,1]
+  
+  r42[i]<- sqrt( summary(lm(eta.x~eta.hat.x))$r.squared)
+} 
+
+
 
